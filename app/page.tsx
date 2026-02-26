@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { fetchHoursData } from '@/lib/hoursData'
 import { fetchFraudAnalysis } from '@/lib/fraudAnalysis'
 import MetricCard from './components/MetricCard'
@@ -7,10 +9,11 @@ import TimePatternChart from './components/TimePatternChart'
 import DailyDistributionChart from './components/DailyDistributionChart'
 import RecentActivity from './components/RecentActivity'
 import FraudReport from './components/FraudReport'
+import JobStatusChart from './components/JobStatusChart'
 
 export default async function Home() {
   const [
-    { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays },
+    { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays, statusBreakdown },
     fraudReport,
   ] = await Promise.all([fetchHoursData(), fetchFraudAnalysis()])
 
@@ -77,9 +80,10 @@ export default async function Home() {
       {/* Top Jobs + Daily Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
             Top 15 Jobs by Hours
           </h2>
+          <p className="text-xs text-zinc-600 mb-4">Color = current job status · Hover for details</p>
           <TopJobsChart data={topJobs} />
         </section>
 
@@ -90,6 +94,15 @@ export default async function Home() {
           <DailyDistributionChart data={dailyDistribution} />
         </section>
       </div>
+
+      {/* Hours by Job Status */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Hours by Job Status
+        </h2>
+        <p className="text-xs text-zinc-600 mb-4">Current status of each job worked on · linked via jobs → statuses</p>
+        <JobStatusChart data={statusBreakdown} />
+      </section>
 
       {/* Time Pattern Charts */}
       <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">

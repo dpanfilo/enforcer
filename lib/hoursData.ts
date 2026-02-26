@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { fetchJobDetails, type JobDetail } from './jobEnrichment'
 
 interface RawRow {
   date: string
@@ -32,6 +33,19 @@ export interface MonthlyData {
 export interface JobData {
   job: string
   hours: number
+  description?: string
+  city?: string
+  state?: string
+  status_name?: string
+  macro_status?: string
+  rush?: boolean
+}
+
+export interface StatusBreakdown {
+  status: string
+  macro_status: string
+  hours: number
+  jobCount: number
 }
 
 export interface HourCount {
@@ -61,6 +75,7 @@ export interface HoursData {
   endHours: HourCount[]
   dailyDistribution: BucketData[]
   recentDays: RecentDay[]
+  statusBreakdown: StatusBreakdown[]
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -274,11 +289,49 @@ export async function fetchHoursData(): Promise<HoursData> {
       days: v.days.size,
     }))
 
-  // --- Top 15 jobs ---
-  const topJobs: JobData[] = Array.from(jobMap.entries())
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 15)
-    .map(([job, hours]) => ({ job, hours: Math.round(hours * 100) / 100 }))
+  // --- All jobs sorted by hours ---
+  const allJobsSorted = Array.from(jobMap.entries()).sort(([, a], [, b]) => b - a)
+
+  // --- Enrich with job details from jobs + statuses tables ---
+  const uniqueJobCodes = allJobsSorted.map(([job]) => job).filter(Boolean)
+  const jobDetails: Map<string, JobDetail> = await fetchJobDetails(uniqueJobCodes)
+
+  // --- Top 15 jobs (enriched) ---
+  const topJobs: JobData[] = allJobsSorted.slice(0, 15).map(([job, hours]) => {
+    const detail = jobDetails.get(job)
+    return {
+      job,
+      hours: Math.round(hours * 100) / 100,
+      description: detail?.description,
+      city: detail?.city,
+      state: detail?.state,
+      status_name: detail?.status_name,
+      macro_status: detail?.macro_status,
+      rush: detail?.rush,
+    }
+  })
+
+  // --- Hours by current job status ---
+  const statusHoursMap = new Map<string, { macro_status: string; hours: number; jobs: Set<string> }>()
+  for (const [job, hours] of allJobsSorted) {
+    const detail = jobDetails.get(job)
+    const statusKey = detail?.status_name ?? 'Unknown'
+    const macroKey = detail?.macro_status ?? ''
+    if (!statusHoursMap.has(statusKey)) {
+      statusHoursMap.set(statusKey, { macro_status: macroKey, hours: 0, jobs: new Set() })
+    }
+    const entry = statusHoursMap.get(statusKey)!
+    entry.hours += hours
+    entry.jobs.add(job)
+  }
+  const statusBreakdown: StatusBreakdown[] = Array.from(statusHoursMap.entries())
+    .map(([status, v]) => ({
+      status,
+      macro_status: v.macro_status,
+      hours: Math.round(v.hours * 100) / 100,
+      jobCount: v.jobs.size,
+    }))
+    .sort((a, b) => b.hours - a.hours)
 
   // --- Start/end hour arrays ---
   const startHours: HourCount[] = []
@@ -349,5 +402,6 @@ export async function fetchHoursData(): Promise<HoursData> {
     endHours,
     dailyDistribution,
     recentDays,
+    statusBreakdown,
   }
 }
