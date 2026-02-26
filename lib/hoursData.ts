@@ -2,13 +2,13 @@ import { supabase } from './supabase'
 
 interface RawRow {
   date: string
-  start: string
-  end: string
-  straight_code: string
-  straight_hours: number
+  start: string | null
+  end: string | null
+  straight_code: string | null
+  straight_hours: number | string | null
   premium_code: string | null
-  premium_hours: number | null
-  job: string
+  premium_hours: number | string | null
+  job: string | null
   notes: string | null
 }
 
@@ -63,6 +63,72 @@ export interface HoursData {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+/** Safely coerce Supabase value (string or number) to a finite number */
+function toNum(v: number | string | null | undefined): number {
+  if (v === null || v === undefined || v === '') return 0
+  const n = typeof v === 'number' ? v : parseFloat(String(v))
+  return isFinite(n) ? n : 0
+}
+
+/**
+ * Normalize any date string to YYYY-MM-DD.
+ * Handles: YYYY-MM-DD, M/D/YYYY, MM/DD/YYYY, M/D/YY, MM/DD/YY
+ */
+function normalizeDate(raw: string): string {
+  if (!raw) return ''
+  const s = raw.trim()
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+
+  // M/D/YYYY or MM/DD/YYYY or M/D/YY
+  const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (slashMatch) {
+    let [, m, d, y] = slashMatch
+    if (y.length === 2) y = parseInt(y, 10) >= 50 ? `19${y}` : `20${y}`
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+
+  // Fallback: try to parse with Date and re-format
+  const dt = new Date(s)
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const d = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  return s // return as-is if nothing worked
+}
+
+/**
+ * Parse a time string and return the hour (0–23).
+ * Handles: HH:MM, HH:MM:SS, H:MM AM/PM, H:MM:SS AM/PM
+ */
+function parseHour(raw: string | null | undefined): number | null {
+  if (!raw) return null
+  const s = raw.trim()
+
+  // Try "H:MM AM" or "H:MM PM" (12-hour)
+  const ampm = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i)
+  if (ampm) {
+    let h = parseInt(ampm[1], 10)
+    const period = ampm[3].toUpperCase()
+    if (period === 'AM' && h === 12) h = 0
+    if (period === 'PM' && h !== 12) h += 12
+    return isFinite(h) ? h : null
+  }
+
+  // Try "HH:MM" or "HH:MM:SS" (24-hour)
+  const h24 = s.match(/^(\d{1,2}):/)
+  if (h24) {
+    const h = parseInt(h24[1], 10)
+    return isFinite(h) && h >= 0 && h <= 23 ? h : null
+  }
+
+  return null
+}
+
 export async function fetchHoursData(): Promise<HoursData> {
   const allRows: RawRow[] = []
 
@@ -80,12 +146,14 @@ export async function fetchHoursData(): Promise<HoursData> {
     if (data.length < 1000) break
   }
 
-  // Group rows by date
+  // Normalize dates and group rows by normalized date
   const byDate = new Map<string, RawRow[]>()
   for (const row of allRows) {
-    const existing = byDate.get(row.date) ?? []
+    const normDate = normalizeDate(row.date)
+    if (!normDate) continue
+    const existing = byDate.get(normDate) ?? []
     existing.push(row)
-    byDate.set(row.date, existing)
+    byDate.set(normDate, existing)
   }
 
   // --- Metrics ---
@@ -104,21 +172,19 @@ export async function fetchHoursData(): Promise<HoursData> {
   for (const [date, rows] of byDate.entries()) {
     const d = new Date(date + 'T00:00:00')
     const dow = d.getDay() // 0=Sun, 6=Sat
-    const isWeekend = dow === 0 || dow === 6
-    if (isWeekend) weekendDays++
+    if (dow === 0 || dow === 6) weekendDays++
 
     let dayTotal = 0
     let dayStr = 0
     let dayOvt = 0
 
     for (const row of rows) {
-      const sh = row.straight_hours ?? 0
-      const ph = row.premium_hours ?? 0
+      const sh = toNum(row.straight_hours)
+      const ph = toNum(row.premium_hours)
       dayStr += sh
       dayOvt += ph
       dayTotal += sh + ph
 
-      // Job hours
       if (row.job) {
         jobMap.set(row.job, (jobMap.get(row.job) ?? 0) + sh + ph)
       }
@@ -130,37 +196,35 @@ export async function fetchHoursData(): Promise<HoursData> {
     dailyHours.set(date, dayTotal)
     if (dayTotal > 8) daysOver8++
 
-    // Monthly
-    const monthKey = date.slice(0, 7) // YYYY-MM
+    // Monthly key from normalized YYYY-MM-DD
+    const monthKey = date.slice(0, 7) // always YYYY-MM after normalization
     if (!monthlyMap.has(monthKey)) {
       monthlyMap.set(monthKey, { straight: 0, overtime: 0, days: new Set() })
     }
-    const m = monthlyMap.get(monthKey)!
-    m.straight += dayStr
-    m.overtime += dayOvt
-    m.days.add(date)
+    const mo = monthlyMap.get(monthKey)!
+    mo.straight += dayStr
+    mo.overtime += dayOvt
+    mo.days.add(date)
 
-    // Start/end hours — first start and last end of the day
-    const sortedByStart = [...rows].sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
-    const sortedByEnd = [...rows].sort((a, b) => (a.end ?? '').localeCompare(b.end ?? ''))
+    // Start/end hour of each day
+    const sortedByStart = [...rows].sort((a, b) =>
+      (a.start ?? '').localeCompare(b.start ?? '')
+    )
+    const sortedByEnd = [...rows].sort((a, b) =>
+      (a.end ?? '').localeCompare(b.end ?? '')
+    )
 
-    const firstStart = sortedByStart[0]?.start
-    const lastEnd = sortedByEnd[sortedByEnd.length - 1]?.end
+    const startHour = parseHour(sortedByStart[0]?.start)
+    const endHour = parseHour(sortedByEnd[sortedByEnd.length - 1]?.end)
 
-    if (firstStart) {
-      const hour = parseInt(firstStart.slice(0, 2), 10)
-      if (!isNaN(hour)) startHourMap.set(hour, (startHourMap.get(hour) ?? 0) + 1)
-    }
-    if (lastEnd) {
-      const hour = parseInt(lastEnd.slice(0, 2), 10)
-      if (!isNaN(hour)) endHourMap.set(hour, (endHourMap.get(hour) ?? 0) + 1)
-    }
+    if (startHour !== null) startHourMap.set(startHour, (startHourMap.get(startHour) ?? 0) + 1)
+    if (endHour !== null) endHourMap.set(endHour, (endHourMap.get(endHour) ?? 0) + 1)
   }
 
   const totalDays = byDate.size
   const avgHoursPerDay = totalDays > 0 ? totalHours / totalDays : 0
 
-  // --- Monthly array (sorted) ---
+  // --- Monthly array (sorted chronologically) ---
   const monthly: MonthlyData[] = Array.from(monthlyMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, v]) => ({
@@ -176,7 +240,7 @@ export async function fetchHoursData(): Promise<HoursData> {
     .slice(0, 15)
     .map(([job, hours]) => ({ job, hours: Math.round(hours * 100) / 100 }))
 
-  // --- Start/end hour arrays (fill gaps 0–23) ---
+  // --- Start/end hour arrays ---
   const startHours: HourCount[] = []
   const endHours: HourCount[] = []
   for (let h = 0; h <= 23; h++) {
@@ -208,15 +272,15 @@ export async function fetchHoursData(): Promise<HoursData> {
     count,
   }))
 
-  // --- Recent 30 days ---
+  // --- Recent 30 days (sorted, last 30) ---
   const sortedDates = Array.from(byDate.keys()).sort()
-  const last30Dates = sortedDates.slice(-30)
-  const recentDays: RecentDay[] = last30Dates.map((date) => {
+  const last30 = sortedDates.slice(-30)
+  const recentDays: RecentDay[] = last30.map((date) => {
     const rows = byDate.get(date)!
     const d = new Date(date + 'T00:00:00')
-    const dayOfWeek = DAY_NAMES[d.getDay()]
-    const hours = rows.reduce((s, r) => s + (r.straight_hours ?? 0) + (r.premium_hours ?? 0), 0)
-    const jobs = [...new Set(rows.map((r) => r.job).filter(Boolean))]
+    const dayOfWeek = DAY_NAMES[d.getDay()] ?? ''
+    const hours = rows.reduce((s, r) => s + toNum(r.straight_hours) + toNum(r.premium_hours), 0)
+    const jobs = [...new Set(rows.map((r) => r.job).filter((j): j is string => !!j))]
     return { date, dayOfWeek, hours: Math.round(hours * 100) / 100, jobs }
   })
 
