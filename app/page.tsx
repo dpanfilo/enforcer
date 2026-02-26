@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { fetchHoursData } from '@/lib/hoursData'
 import { fetchFraudAnalysis } from '@/lib/fraudAnalysis'
+import { fetchPermitWeekly } from '@/lib/permitData'
 import MetricCard from './components/MetricCard'
 import MonthlyChart from './components/MonthlyChart'
 import TopJobsChart from './components/TopJobsChart'
@@ -10,12 +11,14 @@ import DailyDistributionChart from './components/DailyDistributionChart'
 import RecentActivity from './components/RecentActivity'
 import FraudReport from './components/FraudReport'
 import JobStatusChart from './components/JobStatusChart'
+import PermitWeeklyChart from './components/PermitWeeklyChart'
 
 export default async function Home() {
   const [
     { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays, statusBreakdown },
     fraudReport,
-  ] = await Promise.all([fetchHoursData(), fetchFraudAnalysis()])
+    permitWeekly,
+  ] = await Promise.all([fetchHoursData(), fetchFraudAnalysis(), fetchPermitWeekly()])
 
   // Determine date range from monthly data
   const firstMonth = monthly[0]?.month ?? ''
@@ -102,6 +105,14 @@ export default async function Home() {
         </h2>
         <p className="text-xs text-zinc-600 mb-4">Current status of each job worked on · linked via jobs → statuses</p>
         <JobStatusChart data={statusBreakdown} />
+      </section>
+
+      {/* Permit Submissions per Week */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Jobs Sent to Permit — Weekly
+        </h2>
+        <PermitWeeklyChart data={permitWeekly} />
       </section>
 
       {/* Time Pattern Charts */}
