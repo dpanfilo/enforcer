@@ -48,6 +48,8 @@ export interface RecentDay {
   date: string
   dayOfWeek: string
   hours: number
+  straight: number
+  overtime: number
   jobs: string[]
 }
 
@@ -78,10 +80,8 @@ function normalizeDate(raw: string): string {
   if (!raw) return ''
   const s = raw.trim()
 
-  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
 
-  // M/D/YYYY or MM/DD/YYYY or M/D/YY
   const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
   if (slashMatch) {
     let [, m, d, y] = slashMatch
@@ -89,7 +89,6 @@ function normalizeDate(raw: string): string {
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // Fallback: try to parse with Date and re-format
   const dt = new Date(s)
   if (!isNaN(dt.getTime())) {
     const y = dt.getFullYear()
@@ -98,7 +97,7 @@ function normalizeDate(raw: string): string {
     return `${y}-${m}-${d}`
   }
 
-  return s // return as-is if nothing worked
+  return s
 }
 
 /**
@@ -109,7 +108,6 @@ function parseHour(raw: string | null | undefined): number | null {
   if (!raw) return null
   const s = raw.trim()
 
-  // Try "H:MM AM" or "H:MM PM" (12-hour)
   const ampm = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i)
   if (ampm) {
     let h = parseInt(ampm[1], 10)
@@ -119,7 +117,6 @@ function parseHour(raw: string | null | undefined): number | null {
     return isFinite(h) ? h : null
   }
 
-  // Try "HH:MM" or "HH:MM:SS" (24-hour)
   const h24 = s.match(/^(\d{1,2}):/)
   if (h24) {
     const h = parseInt(h24[1], 10)
@@ -129,10 +126,24 @@ function parseHour(raw: string | null | undefined): number | null {
   return null
 }
 
+/**
+ * Return the ISO date string (YYYY-MM-DD) of the Monday that starts
+ * the week containing `date` (weeks run Mon–Sun).
+ */
+function getMondayOfWeek(date: string): string {
+  const d = new Date(date + 'T00:00:00')
+  const dow = d.getDay() // 0=Sun … 6=Sat
+  const daysSinceMonday = (dow + 6) % 7 // Mon=0, Tue=1, … Sun=6
+  d.setDate(d.getDate() - daysSinceMonday)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 export async function fetchHoursData(): Promise<HoursData> {
   const allRows: RawRow[] = []
 
-  // Fetch all pages (1000 records each)
   for (let offset = 0; offset < 4000; offset += 1000) {
     const { data, error } = await supabase
       .from('hours_import')
@@ -146,7 +157,7 @@ export async function fetchHoursData(): Promise<HoursData> {
     if (data.length < 1000) break
   }
 
-  // Normalize dates and group rows by normalized date
+  // --- Normalize dates and group rows by date ---
   const byDate = new Map<string, RawRow[]>()
   for (const row of allRows) {
     const normDate = normalizeDate(row.date)
@@ -156,48 +167,73 @@ export async function fetchHoursData(): Promise<HoursData> {
     byDate.set(normDate, existing)
   }
 
-  // --- Metrics ---
+  // --- Step 1: total hours worked per day (DB straight + premium = all hours) ---
+  const dailyTotalHours = new Map<string, number>()
+  for (const [date, rows] of byDate.entries()) {
+    const total = rows.reduce(
+      (s, r) => s + toNum(r.straight_hours) + toNum(r.premium_hours),
+      0
+    )
+    dailyTotalHours.set(date, total)
+  }
+
+  // --- Step 2: group dates into Mon–Sun weeks ---
+  const weekMap = new Map<string, string[]>() // mondayKey -> dates[]
+  for (const date of dailyTotalHours.keys()) {
+    const weekKey = getMondayOfWeek(date)
+    const existing = weekMap.get(weekKey) ?? []
+    existing.push(date)
+    weekMap.set(weekKey, existing)
+  }
+
+  // --- Step 3: compute daily straight/overtime via 40h weekly threshold ---
+  const dailyStraight = new Map<string, number>()
+  const dailyOvertime = new Map<string, number>()
+
+  for (const dates of weekMap.values()) {
+    // Process days in chronological order within the week
+    const sorted = [...dates].sort()
+    let weeklyAccum = 0
+
+    for (const date of sorted) {
+      const dayHours = dailyTotalHours.get(date) ?? 0
+      const regularBudget = Math.max(0, 40 - weeklyAccum)
+      const dayStr = Math.min(dayHours, regularBudget)
+      const dayOvt = Math.max(0, dayHours - regularBudget)
+      dailyStraight.set(date, dayStr)
+      dailyOvertime.set(date, dayOvt)
+      weeklyAccum += dayHours
+    }
+  }
+
+  // --- Step 4: aggregate metrics using recalculated straight/overtime ---
   let totalHours = 0
   let straightHours = 0
   let overtimeHours = 0
   let daysOver8 = 0
   let weekendDays = 0
 
-  const dailyHours = new Map<string, number>()
   const monthlyMap = new Map<string, { straight: number; overtime: number; days: Set<string> }>()
   const jobMap = new Map<string, number>()
   const startHourMap = new Map<number, number>()
   const endHourMap = new Map<number, number>()
 
   for (const [date, rows] of byDate.entries()) {
-    const d = new Date(date + 'T00:00:00')
-    const dow = d.getDay() // 0=Sun, 6=Sat
-    if (dow === 0 || dow === 6) weekendDays++
-
-    let dayTotal = 0
-    let dayStr = 0
-    let dayOvt = 0
-
-    for (const row of rows) {
-      const sh = toNum(row.straight_hours)
-      const ph = toNum(row.premium_hours)
-      dayStr += sh
-      dayOvt += ph
-      dayTotal += sh + ph
-
-      if (row.job) {
-        jobMap.set(row.job, (jobMap.get(row.job) ?? 0) + sh + ph)
-      }
-    }
+    const dayTotal = dailyTotalHours.get(date) ?? 0
+    const dayStr = dailyStraight.get(date) ?? 0
+    const dayOvt = dailyOvertime.get(date) ?? 0
 
     totalHours += dayTotal
     straightHours += dayStr
     overtimeHours += dayOvt
-    dailyHours.set(date, dayTotal)
+
+    const d = new Date(date + 'T00:00:00')
+    const dow = d.getDay()
+    if (dow === 0 || dow === 6) weekendDays++
     if (dayTotal > 8) daysOver8++
 
-    // Monthly key from normalized YYYY-MM-DD
-    const monthKey = date.slice(0, 7) // always YYYY-MM after normalization
+    // Monthly
+    const monthKey = date.slice(0, 7)
     if (!monthlyMap.has(monthKey)) {
       monthlyMap.set(monthKey, { straight: 0, overtime: 0, days: new Set() })
     }
@@ -206,13 +242,17 @@ export async function fetchHoursData(): Promise<HoursData> {
     mo.overtime += dayOvt
     mo.days.add(date)
 
-    // Start/end hour of each day
-    const sortedByStart = [...rows].sort((a, b) =>
-      (a.start ?? '').localeCompare(b.start ?? '')
-    )
-    const sortedByEnd = [...rows].sort((a, b) =>
-      (a.end ?? '').localeCompare(b.end ?? '')
-    )
+    // Job hours (total worked, not split)
+    for (const row of rows) {
+      if (row.job) {
+        const rowTotal = toNum(row.straight_hours) + toNum(row.premium_hours)
+        jobMap.set(row.job, (jobMap.get(row.job) ?? 0) + rowTotal)
+      }
+    }
+
+    // Start/end hours for pattern charts
+    const sortedByStart = [...rows].sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
+    const sortedByEnd = [...rows].sort((a, b) => (a.end ?? '').localeCompare(b.end ?? ''))
 
     const startHour = parseHour(sortedByStart[0]?.start)
     const endHour = parseHour(sortedByEnd[sortedByEnd.length - 1]?.end)
@@ -224,7 +264,7 @@ export async function fetchHoursData(): Promise<HoursData> {
   const totalDays = byDate.size
   const avgHoursPerDay = totalDays > 0 ? totalHours / totalDays : 0
 
-  // --- Monthly array (sorted chronologically) ---
+  // --- Monthly array ---
   const monthly: MonthlyData[] = Array.from(monthlyMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, v]) => ({
@@ -259,7 +299,7 @@ export async function fetchHoursData(): Promise<HoursData> {
     '10–12h': 0,
     '12h+': 0,
   }
-  for (const hrs of dailyHours.values()) {
+  for (const hrs of dailyTotalHours.values()) {
     if (hrs < 4) buckets['0–4h']++
     else if (hrs < 6) buckets['4–6h']++
     else if (hrs < 8) buckets['6–8h']++
@@ -272,16 +312,25 @@ export async function fetchHoursData(): Promise<HoursData> {
     count,
   }))
 
-  // --- Recent 30 days (sorted, last 30) ---
+  // --- Recent 30 days ---
   const sortedDates = Array.from(byDate.keys()).sort()
   const last30 = sortedDates.slice(-30)
   const recentDays: RecentDay[] = last30.map((date) => {
     const rows = byDate.get(date)!
     const d = new Date(date + 'T00:00:00')
     const dayOfWeek = DAY_NAMES[d.getDay()] ?? ''
-    const hours = rows.reduce((s, r) => s + toNum(r.straight_hours) + toNum(r.premium_hours), 0)
+    const hours = dailyTotalHours.get(date) ?? 0
+    const straight = dailyStraight.get(date) ?? 0
+    const overtime = dailyOvertime.get(date) ?? 0
     const jobs = [...new Set(rows.map((r) => r.job).filter((j): j is string => !!j))]
-    return { date, dayOfWeek, hours: Math.round(hours * 100) / 100, jobs }
+    return {
+      date,
+      dayOfWeek,
+      hours: Math.round(hours * 100) / 100,
+      straight: Math.round(straight * 100) / 100,
+      overtime: Math.round(overtime * 100) / 100,
+      jobs,
+    }
   })
 
   return {
