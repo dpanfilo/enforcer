@@ -111,7 +111,7 @@ export default async function Home() {
       <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
         <div className="flex items-center gap-3 mb-5">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-            Irregularity &amp; Fraud Analysis
+            Irregularity Analysis
           </h2>
           {fraudReport.summary.high > 0 && (
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40">
