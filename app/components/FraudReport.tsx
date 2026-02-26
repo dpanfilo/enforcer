@@ -104,7 +104,7 @@ export default function FraudReport({ report }: Props) {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="print:hidden flex flex-wrap gap-2 mb-4">
         {(['All', 'high', 'medium', 'low'] as const).map((s) => (
           <button
             key={s}
@@ -140,7 +140,7 @@ export default function FraudReport({ report }: Props) {
       {visible.length === 0 ? (
         <p className="text-zinc-500 text-sm py-4 text-center">No findings match the current filter.</p>
       ) : (
-        <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto pr-1">
+        <div className="print-full-height flex flex-col gap-2 max-h-[600px] overflow-y-auto pr-1">
           {visible.map((flag, i) => (
             <div
               key={i}

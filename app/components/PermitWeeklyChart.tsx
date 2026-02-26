@@ -103,7 +103,7 @@ export default function PermitWeeklyChart({ data }: Props) {
       </p>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div className="print:hidden flex flex-wrap gap-1.5 mb-4">
         {(['All', ...filterOptions.quarters, ...filterOptions.months] as string[]).map((opt) => (
           <button
             key={opt}
@@ -160,7 +160,7 @@ export default function PermitWeeklyChart({ data }: Props) {
 
       {/* Job list panel */}
       {selectedWeek && selectedWeek.jobs > 0 && (
-        <div className="mt-4 rounded-lg border border-zinc-700 p-4" style={{ backgroundColor: '#13151f' }}>
+        <div className="print:hidden mt-4 rounded-lg border border-zinc-700 p-4" style={{ backgroundColor: '#13151f' }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-white">
               Week of {selectedWeek.week} —{' '}

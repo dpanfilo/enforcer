@@ -62,7 +62,7 @@ export default function UnsentJobsTable({ data }: Props) {
       </p>
 
       {/* Controls */}
-      <div className="flex flex-wrap gap-3 mb-4 items-center">
+      <div className="print:hidden flex flex-wrap gap-3 mb-4 items-center">
         <input
           type="text"
           placeholder="Search job # or description…"
@@ -83,7 +83,7 @@ export default function UnsentJobsTable({ data }: Props) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+      <div className="print-full-height overflow-x-auto max-h-[520px] overflow-y-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-zinc-900 z-10">
             <tr className="text-zinc-400 text-left">

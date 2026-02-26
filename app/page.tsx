@@ -72,7 +72,7 @@ export default async function Home() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      <div className="metric-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         <MetricCard label="Total Hours" value={`${metrics.totalHours}h`} />
         <MetricCard label="Regular (REG)" value={`${metrics.straightHours}h`} />
         <MetricCard
@@ -94,8 +94,8 @@ export default async function Home() {
         />
       </div>
 
-      {/* Activity Calendar */}
-      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+      {/* Activity Calendar — hidden in print (too wide for paper) */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="print:hidden rounded-xl p-6 mb-6">
         <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
           Activity Calendar
         </h2>
@@ -127,7 +127,7 @@ export default async function Home() {
       </section>
 
       {/* Top Jobs + Daily Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="print-stack grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
             Top 15 Jobs by Hours
