@@ -58,25 +58,25 @@ export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
   const realRows = allRows.filter((r) => r.changed_at.slice(0, 10) !== BULK_MIGRATION_DATE)
   if (realRows.length === 0) return []
 
-  // Group unique job_ids by Monday week
-  const weekJobs = new Map<string, Set<number>>()
+  // Group unique job_ids by Monday week — coerce to string for consistent keys
+  const weekJobs = new Map<string, Set<string>>()
   for (const row of realRows) {
     const key = getMondayKey(row.changed_at.slice(0, 10))
     if (!weekJobs.has(key)) weekJobs.set(key, new Set())
-    weekJobs.get(key)!.add(row.job_id)
+    weekJobs.get(key)!.add(String(row.job_id))
   }
 
   // Fetch job details for all unique job_ids
-  const uniqueJobIds = [...new Set(realRows.map((r) => r.job_id))]
-  const jobMap = new Map<number, PermitJobEntry>()
+  const uniqueJobIds = [...new Set(realRows.map((r) => String(r.job_id)))]
+  const jobMap = new Map<string, PermitJobEntry>()
   for (let i = 0; i < uniqueJobIds.length; i += 100) {
     const chunk = uniqueJobIds.slice(i, i + 100)
     const { data } = await supabase
       .from('jobs')
       .select('index,full_number,project_description')
       .in('index', chunk)
-    for (const j of (data ?? []) as { index: number; full_number: string; project_description?: string }[]) {
-      jobMap.set(Number(j.index), {
+    for (const j of (data ?? []) as { index: number | string; full_number: string; project_description?: string }[]) {
+      jobMap.set(String(j.index), {
         fullNumber: j.full_number,
         description: j.project_description ?? '',
       })
@@ -91,7 +91,7 @@ export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
 
   while (cur <= last) {
     const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-    const ids = weekJobs.get(key) ?? new Set<number>()
+    const ids = weekJobs.get(key) ?? new Set<string>()
     const jobList = [...ids]
       .map((id) => jobMap.get(id))
       .filter((j): j is PermitJobEntry => !!j)
