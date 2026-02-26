@@ -98,18 +98,46 @@ body {
   /* ── Remove scroll caps so tables print fully ── */
   .print-full-height {
     max-height: none !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
-  /* ── Overflow containers ── */
-  .overflow-x-auto {
-    overflow: visible !important;
+  /* ── Overflow containers: clip rather than scroll or overflow ── */
+  .overflow-x-auto,
+  .overflow-y-auto {
+    overflow: hidden !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   /* ── Hide screen-only elements ── */
   .print\:hidden { display: none !important; }
 
-  /* ── Tables ── */
-  table { font-size: 7.5pt !important; width: 100% !important; }
-  th, td { padding: 2pt 4pt !important; }
+  /* ── Tables: fixed layout so columns respect page width ── */
+  table {
+    font-size: 7.5pt !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    padding: 2pt 4pt !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    max-width: 0 !important; /* combined with table-layout:fixed distributes columns evenly */
+  }
+
+  /* Description columns get more room and can wrap */
+  td:nth-child(2) {
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  /* Jobs column in RecentActivity can wrap */
+  td:last-child {
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
 }
