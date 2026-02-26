@@ -18,7 +18,8 @@ export async function fetchEmployees(): Promise<string[]> {
     }
     if (data.length < 1000) break
   }
-  return [...names].sort()
+  const EXCLUDED = new Set(['Alan Saavedra'])
+  return [...names].filter((n) => !EXCLUDED.has(n)).sort()
 }
 
 export function nameToSlug(name: string): string {
