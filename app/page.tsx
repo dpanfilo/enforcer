@@ -1,14 +1,18 @@
 import { fetchHoursData } from '@/lib/hoursData'
+import { fetchFraudAnalysis } from '@/lib/fraudAnalysis'
 import MetricCard from './components/MetricCard'
 import MonthlyChart from './components/MonthlyChart'
 import TopJobsChart from './components/TopJobsChart'
 import TimePatternChart from './components/TimePatternChart'
 import DailyDistributionChart from './components/DailyDistributionChart'
 import RecentActivity from './components/RecentActivity'
+import FraudReport from './components/FraudReport'
 
 export default async function Home() {
-  const { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays } =
-    await fetchHoursData()
+  const [
+    { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays },
+    fraudReport,
+  ] = await Promise.all([fetchHoursData(), fetchFraudAnalysis()])
 
   // Determine date range from monthly data
   const firstMonth = monthly[0]?.month ?? ''
@@ -96,11 +100,26 @@ export default async function Home() {
       </section>
 
       {/* Recent Activity */}
-      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
         <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
           Recent 30 Days
         </h2>
         <RecentActivity data={recentDays} />
+      </section>
+
+      {/* Fraud / Irregularity Report */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
+            Irregularity &amp; Fraud Analysis
+          </h2>
+          {fraudReport.summary.high > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40">
+              {fraudReport.summary.high} HIGH RISK
+            </span>
+          )}
+        </div>
+        <FraudReport report={fraudReport} />
       </section>
     </main>
   )
