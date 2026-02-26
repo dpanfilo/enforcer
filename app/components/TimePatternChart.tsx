@@ -22,6 +22,12 @@ const tooltipStyle = {
   itemStyle: { color: '#e5e7eb' },
 }
 
+function fmtHour(h: number): string {
+  if (h === 0) return '12 AM'
+  if (h === 12) return '12 PM'
+  return h < 12 ? `${h} AM` : `${h - 12} PM`
+}
+
 function HourChart({ data, color, label }: { data: HourCount[]; color: string; label: string }) {
   return (
     <div className="flex-1 min-w-0">
@@ -32,13 +38,13 @@ function HourChart({ data, color, label }: { data: HourCount[]; color: string; l
           <XAxis
             dataKey="hour"
             tick={{ fill: '#9ca3af', fontSize: 10 }}
-            tickFormatter={(h) => `${h}:00`}
+            tickFormatter={(h) => fmtHour(Number(h))}
           />
           <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} />
           <Tooltip
             {...tooltipStyle}
             formatter={(v: number | undefined) => [`${v ?? 0} days`, 'Count']}
-            labelFormatter={(h) => `${h}:00`}
+            labelFormatter={(h) => fmtHour(Number(h))}
           />
           <Bar dataKey="count" fill={color} radius={[3, 3, 0, 0]} />
         </BarChart>
