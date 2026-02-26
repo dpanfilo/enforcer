@@ -1,9 +1,15 @@
 import { supabase } from './supabase'
 
+export interface PermitJobEntry {
+  fullNumber: string
+  description: string
+}
+
 export interface PermitWeek {
-  week: string   // display label e.g. "Nov 10"
-  weekKey: string // YYYY-MM-DD (Monday) for sorting
+  week: string    // display label e.g. "Nov 10"
+  weekKey: string // YYYY-MM-DD (Monday) for sorting/filtering
   jobs: number
+  jobList: PermitJobEntry[]
 }
 
 const BULK_MIGRATION_DATE = '2025-11-04'
@@ -11,8 +17,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 function getMondayKey(dateStr: string): string {
   const dt = new Date(dateStr + 'T00:00:00')
-  const day = dt.getDay() // 0=Sun
-  const offset = (day + 6) % 7  // days since Monday
+  const offset = (dt.getDay() + 6) % 7
   dt.setDate(dt.getDate() - offset)
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
@@ -61,7 +66,24 @@ export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
     weekJobs.get(key)!.add(row.job_id)
   }
 
-  // Build continuous week range (first → last), filling gaps with 0
+  // Fetch job details for all unique job_ids
+  const uniqueJobIds = [...new Set(realRows.map((r) => r.job_id))]
+  const jobMap = new Map<number, PermitJobEntry>()
+  for (let i = 0; i < uniqueJobIds.length; i += 100) {
+    const chunk = uniqueJobIds.slice(i, i + 100)
+    const { data } = await supabase
+      .from('jobs')
+      .select('index,full_number,project_description')
+      .in('index', chunk)
+    for (const j of (data ?? []) as { index: number; full_number: string; project_description?: string }[]) {
+      jobMap.set(Number(j.index), {
+        fullNumber: j.full_number,
+        description: j.project_description ?? '',
+      })
+    }
+  }
+
+  // Build continuous week range (first → last), filling gaps with empty jobList
   const keys = Array.from(weekJobs.keys()).sort()
   const result: PermitWeek[] = []
   const cur = new Date(keys[0] + 'T00:00:00')
@@ -69,11 +91,13 @@ export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
 
   while (cur <= last) {
     const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-    result.push({
-      week: weekLabel(key),
-      weekKey: key,
-      jobs: weekJobs.get(key)?.size ?? 0,
-    })
+    const ids = weekJobs.get(key) ?? new Set<number>()
+    const jobList = [...ids]
+      .map((id) => jobMap.get(id))
+      .filter((j): j is PermitJobEntry => !!j)
+      .sort((a, b) => a.fullNumber.localeCompare(b.fullNumber))
+
+    result.push({ week: weekLabel(key), weekKey: key, jobs: ids.size, jobList })
     cur.setDate(cur.getDate() + 7)
   }
 
