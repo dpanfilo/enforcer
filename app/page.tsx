@@ -1,65 +1,107 @@
-import Image from "next/image";
+import { fetchHoursData } from '@/lib/hoursData'
+import MetricCard from './components/MetricCard'
+import MonthlyChart from './components/MonthlyChart'
+import TopJobsChart from './components/TopJobsChart'
+import TimePatternChart from './components/TimePatternChart'
+import DailyDistributionChart from './components/DailyDistributionChart'
+import RecentActivity from './components/RecentActivity'
 
-export default function Home() {
+export default async function Home() {
+  const { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays } =
+    await fetchHoursData()
+
+  // Determine date range from monthly data
+  const firstMonth = monthly[0]?.month ?? ''
+  const lastMonth = monthly[monthly.length - 1]?.month ?? ''
+  const formatMonth = (ym: string) => {
+    if (!ym) return ''
+    const [y, m] = ym.split('-')
+    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    return `${names[parseInt(m, 10) - 1]} ${y}`
+  }
+  const dateRange = firstMonth && lastMonth ? `${formatMonth(firstMonth)} – ${formatMonth(lastMonth)}` : ''
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main
+      className="min-h-screen p-6 md:p-10 font-sans"
+      style={{ backgroundColor: '#0f1117', color: '#e5e7eb' }}
+    >
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-white">
+          Jovani Mendoza &middot; Time Dashboard
+        </h1>
+        {dateRange && (
+          <p className="text-zinc-400 text-sm mt-1">{dateRange}</p>
+        )}
+      </div>
+
+      {/* Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <MetricCard label="Total Hours" value={`${metrics.totalHours}h`} />
+        <MetricCard label="Regular (REG)" value={`${metrics.straightHours}h`} />
+        <MetricCard
+          label="Overtime (OVT)"
+          value={`${metrics.overtimeHours}h`}
+          highlight={metrics.overtimeHours > 500}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+        <MetricCard label="Work Days" value={metrics.totalDays} />
+        <MetricCard
+          label="Avg / Day"
+          value={`${metrics.avgHoursPerDay}h`}
+          highlight={metrics.avgHoursPerDay > 9}
+        />
+        <MetricCard
+          label="Days Over 8h"
+          value={metrics.daysOver8}
+          sub={`${metrics.weekendDays} weekend days`}
+          highlight={true}
+        />
+      </div>
+
+      {/* Monthly Chart */}
+      <section
+        style={{ backgroundColor: '#1a1d27' }}
+        className="rounded-xl p-6 mb-6"
+      >
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+          Monthly Hours — REG vs OVT
+        </h2>
+        <MonthlyChart data={monthly} />
+      </section>
+
+      {/* Top Jobs + Daily Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+            Top 15 Jobs by Hours
+          </h2>
+          <TopJobsChart data={topJobs} />
+        </section>
+
+        <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+            Daily Hours Distribution
+          </h2>
+          <DailyDistributionChart data={dailyDistribution} />
+        </section>
+      </div>
+
+      {/* Time Pattern Charts */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+          Start &amp; End Time Patterns
+        </h2>
+        <TimePatternChart startHours={startHours} endHours={endHours} />
+      </section>
+
+      {/* Recent Activity */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+          Recent 30 Days
+        </h2>
+        <RecentActivity data={recentDays} />
+      </section>
+    </main>
+  )
 }
