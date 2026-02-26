@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic'
 import { fetchHoursData } from '@/lib/hoursData'
 import { fetchFraudAnalysis } from '@/lib/fraudAnalysis'
 import { fetchPermitWeekly } from '@/lib/permitData'
+import { fetchUnsentJobs } from '@/lib/unsentJobs'
+import { fetchTimeToPermit } from '@/lib/timeToPermit'
 import MetricCard from './components/MetricCard'
 import MonthlyChart from './components/MonthlyChart'
 import TopJobsChart from './components/TopJobsChart'
@@ -12,13 +14,33 @@ import RecentActivity from './components/RecentActivity'
 import FraudReport from './components/FraudReport'
 import JobStatusChart from './components/JobStatusChart'
 import PermitWeeklyChart from './components/PermitWeeklyChart'
+import AdminCodeChart from './components/AdminCodeChart'
+import WeeklyTrendChart from './components/WeeklyTrendChart'
+import UnsentJobsTable from './components/UnsentJobsTable'
+import TimeToPermitChart from './components/TimeToPermitChart'
+import CalendarHeatmap from './components/CalendarHeatmap'
+import PrintButton from './components/PrintButton'
 
 export default async function Home() {
   const [
-    { metrics, monthly, topJobs, startHours, endHours, dailyDistribution, recentDays, statusBreakdown },
+    hoursData,
     fraudReport,
     permitWeekly,
-  ] = await Promise.all([fetchHoursData(), fetchFraudAnalysis(), fetchPermitWeekly()])
+    unsentJobsData,
+    timeToPermitData,
+  ] = await Promise.all([
+    fetchHoursData(),
+    fetchFraudAnalysis(),
+    fetchPermitWeekly(),
+    fetchUnsentJobs(),
+    fetchTimeToPermit(),
+  ])
+
+  const {
+    metrics, monthly, topJobs, startHours, endHours,
+    dailyDistribution, recentDays, statusBreakdown,
+    adminBreakdown, weeklyTrend, calendarDays,
+  } = hoursData
 
   // Determine date range from monthly data
   const firstMonth = monthly[0]?.month ?? ''
@@ -37,13 +59,16 @@ export default async function Home() {
       style={{ backgroundColor: '#0f1117', color: '#e5e7eb' }}
     >
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-white">
-          Jovani Mendoza &middot; Time Dashboard
-        </h1>
-        {dateRange && (
-          <p className="text-zinc-400 text-sm mt-1">{dateRange}</p>
-        )}
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">
+            Jovani Mendoza &middot; Time Dashboard
+          </h1>
+          {dateRange && (
+            <p className="text-zinc-400 text-sm mt-1">{dateRange}</p>
+          )}
+        </div>
+        <PrintButton />
       </div>
 
       {/* Metric Cards */}
@@ -69,15 +94,36 @@ export default async function Home() {
         />
       </div>
 
+      {/* Activity Calendar */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+          Activity Calendar
+        </h2>
+        <CalendarHeatmap data={calendarDays} />
+      </section>
+
       {/* Monthly Chart */}
-      <section
-        style={{ backgroundColor: '#1a1d27' }}
-        className="rounded-xl p-6 mb-6"
-      >
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
         <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
           Monthly Hours — REG vs OVT
         </h2>
         <MonthlyChart data={monthly} />
+      </section>
+
+      {/* Weekly Trend */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Weekly Hours Trend — REG vs OVT
+        </h2>
+        <WeeklyTrendChart data={weeklyTrend} />
+      </section>
+
+      {/* Admin Code Breakdown */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Admin / Non-Billable Hours — {adminBreakdown.adminPct}% of Total
+        </h2>
+        <AdminCodeChart data={adminBreakdown} />
       </section>
 
       {/* Top Jobs + Daily Distribution */}
@@ -103,7 +149,7 @@ export default async function Home() {
         <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
           Hours by Job Status
         </h2>
-        <p className="text-xs text-zinc-600 mb-4">Current status of each job worked on · linked via jobs → statuses</p>
+        <p className="text-xs text-zinc-600 mb-4">Current status of each job worked on</p>
         <JobStatusChart data={statusBreakdown} />
       </section>
 
@@ -115,7 +161,29 @@ export default async function Home() {
         <PermitWeeklyChart data={permitWeekly} />
       </section>
 
-      {/* Time Pattern Charts */}
+      {/* Time to Permit */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Days from First Hours Entry to Permit Submission
+        </h2>
+        <p className="text-xs text-zinc-600 mb-4">
+          How long after Jovani first logged hours on a job did JMendoza submit it to permit
+        </p>
+        <TimeToPermitChart data={timeToPermitData} />
+      </section>
+
+      {/* Jobs with hours but no permit */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Billable Jobs — No Permit Submission
+        </h2>
+        <p className="text-xs text-zinc-600 mb-4">
+          Jobs where Jovani logged hours but JMendoza has no "To Permit" record in the system
+        </p>
+        <UnsentJobsTable data={unsentJobsData} />
+      </section>
+
+      {/* Start & End Time Patterns */}
       <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-6">
         <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
           Start &amp; End Time Patterns
@@ -131,7 +199,7 @@ export default async function Home() {
         <RecentActivity data={recentDays} />
       </section>
 
-      {/* Fraud / Irregularity Report */}
+      {/* Irregularity Analysis */}
       <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6">
         <div className="flex items-center gap-3 mb-5">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">

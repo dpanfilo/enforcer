@@ -48,6 +48,41 @@ export interface StatusBreakdown {
   jobCount: number
 }
 
+export interface AdminCodeBreakdown {
+  code: string
+  hours: number
+  pct: number  // % of total hours, 1 dp
+}
+
+export interface AdminBreakdownData {
+  adminTotal: number
+  billableTotal: number
+  adminPct: number
+  breakdown: AdminCodeBreakdown[]
+}
+
+export interface WeeklyTrend {
+  weekKey: string
+  week: string
+  straight: number
+  overtime: number
+  total: number
+  days: number
+}
+
+export interface CalendarDay {
+  date: string
+  hours: number
+  hasEntry: boolean
+}
+
+export interface CalendarHeatmapData {
+  days: CalendarDay[]
+  startDate: string
+  endDate: string
+  maxHours: number
+}
+
 export interface HourCount {
   hour: number
   count: number
@@ -76,9 +111,28 @@ export interface HoursData {
   dailyDistribution: BucketData[]
   recentDays: RecentDay[]
   statusBreakdown: StatusBreakdown[]
+  adminBreakdown: AdminBreakdownData
+  weeklyTrend: WeeklyTrend[]
+  calendarDays: CalendarHeatmapData
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+export const ADMIN_CODES = new Set([
+  'PREP WORK', 'job-prep',
+  'Permit Submittals', 'PERMIT APPROVAL', 'permit-submittals', 'permit-prep',
+  'emails', 'TEAM MEETINGS', 'meeting', 'team-questions',
+  'DRAWING REVIEW', 'REVIEWER QUESTIONS', 'UPDATING STANDARDS',
+  'ESPO', 'ESPO IT', 'it-help',
+  'Driving',
+  'Potential Client/Project Prep', 'TimeCard-Correction',
+])
+
+function weekLabel(mondayKey: string): string {
+  const [, m, d] = mondayKey.split('-')
+  return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`
+}
 
 /** Safely coerce Supabase value (string or number) to a finite number */
 function toNum(v: number | string | null | undefined): number {
@@ -172,6 +226,32 @@ export async function fetchHoursData(): Promise<HoursData> {
     if (data.length < 1000) break
   }
 
+  // --- Admin code breakdown (computed from raw rows before date grouping) ---
+  const adminCodeMap = new Map<string, number>()
+  let adminRawTotal = 0
+  let grandRawTotal = 0
+  for (const row of allRows) {
+    const h = toNum(row.straight_hours) + toNum(row.premium_hours)
+    grandRawTotal += h
+    if (row.job && ADMIN_CODES.has(row.job)) {
+      adminRawTotal += h
+      adminCodeMap.set(row.job, (adminCodeMap.get(row.job) ?? 0) + h)
+    }
+  }
+  const adminBreakdown: AdminBreakdownData = {
+    adminTotal: Math.round(adminRawTotal * 100) / 100,
+    billableTotal: Math.round((grandRawTotal - adminRawTotal) * 100) / 100,
+    adminPct: grandRawTotal > 0 ? Math.round((adminRawTotal / grandRawTotal) * 100) : 0,
+    breakdown: Array.from(adminCodeMap.entries())
+      .filter(([, h]) => h > 0.05)
+      .map(([code, hours]) => ({
+        code,
+        hours: Math.round(hours * 100) / 100,
+        pct: grandRawTotal > 0 ? Math.round((hours / grandRawTotal) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.hours - a.hours),
+  }
+
   // --- Normalize dates and group rows by date ---
   const byDate = new Map<string, RawRow[]>()
   for (const row of allRows) {
@@ -219,6 +299,47 @@ export async function fetchHoursData(): Promise<HoursData> {
       dailyOvertime.set(date, dayOvt)
       weeklyAccum += dayHours
     }
+  }
+
+  // --- Weekly trend ---
+  const weeklyTrend: WeeklyTrend[] = Array.from(weekMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([wk, dates]) => {
+      let str = 0, ovt = 0
+      for (const d of dates) {
+        str += dailyStraight.get(d) ?? 0
+        ovt += dailyOvertime.get(d) ?? 0
+      }
+      return {
+        weekKey: wk,
+        week: weekLabel(wk),
+        straight: Math.round(str * 100) / 100,
+        overtime: Math.round(ovt * 100) / 100,
+        total: Math.round((str + ovt) * 100) / 100,
+        days: dates.length,
+      }
+    })
+
+  // --- Calendar heatmap data ---
+  const sortedWorkDates = Array.from(dailyTotalHours.keys()).sort()
+  const calRangeStart = sortedWorkDates[0] ?? '2025-01-01'
+  const calRangeEnd = sortedWorkDates[sortedWorkDates.length - 1] ?? '2026-02-28'
+  const calDaysArr: CalendarDay[] = []
+  let calMax = 0
+  const calCur = new Date(calRangeStart + 'T00:00:00')
+  const calEnd = new Date(calRangeEnd + 'T00:00:00')
+  while (calCur <= calEnd) {
+    const ds = `${calCur.getFullYear()}-${String(calCur.getMonth() + 1).padStart(2, '0')}-${String(calCur.getDate()).padStart(2, '0')}`
+    const h = dailyTotalHours.get(ds) ?? 0
+    if (h > calMax) calMax = h
+    calDaysArr.push({ date: ds, hours: Math.round(h * 100) / 100, hasEntry: dailyTotalHours.has(ds) })
+    calCur.setDate(calCur.getDate() + 1)
+  }
+  const calendarDays: CalendarHeatmapData = {
+    days: calDaysArr,
+    startDate: calRangeStart,
+    endDate: calRangeEnd,
+    maxHours: Math.round(calMax * 100) / 100,
   }
 
   // --- Step 4: aggregate metrics using recalculated straight/overtime ---
@@ -403,5 +524,8 @@ export async function fetchHoursData(): Promise<HoursData> {
     dailyDistribution,
     recentDays,
     statusBreakdown,
+    adminBreakdown,
+    weeklyTrend,
+    calendarDays,
   }
 }

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(__NEW_LINE_09e1aad9dbf54aca__ python3:*)",
+      "Bash(__NEW_LINE_015000dbbefa5a63__ curl:*)"
+    ]
+  }
+}
