@@ -32,7 +32,6 @@ export interface FraudReport {
     overlaps: number
     adminHours: number
     adminPct: number
-    unbilledClosedHours: number
     unrecognizedCodes: string[]
   }
 }
@@ -365,39 +364,6 @@ export async function fetchFraudAnalysis(): Promise<FraudReport> {
     }
   }
 
-  // ── 16. Hours on closed + unbilled jobs ──────────────────────────────────
-  const realJobCodes = [...new Set(rows.map((r) => r.job).filter((j): j is string => !!j && !ADMIN_CODES.has(j)))]
-  let unbilledClosedHours = 0
-  let unbilledClosedCount = 0
-
-  for (let i = 0; i < realJobCodes.length; i += 100) {
-    const chunk = realJobCodes.slice(i, i + 100)
-    const { data } = await supabase
-      .from('jobs')
-      .select('full_number,macro_status,billing_lifecycle_status')
-      .in('full_number', chunk)
-      .eq('billing_lifecycle_status', 'unbilled')
-      .eq('macro_status', 'closed')
-
-    for (const job of data ?? []) {
-      const jobHours = rows.reduce((s, r) =>
-        r.job === job.full_number ? s + toNum(r.straight_hours) + toNum(r.premium_hours) : s, 0)
-      if (jobHours > 0) {
-        unbilledClosedHours += jobHours
-        unbilledClosedCount++
-      }
-    }
-  }
-
-  if (unbilledClosedCount > 0) {
-    flags.push({
-      severity: 'medium',
-      category: 'Hours on Closed Unbilled Jobs',
-      date: '—',
-      detail: `${unbilledClosedHours.toFixed(2)}h billed across ${unbilledClosedCount} jobs that are now closed with billing_lifecycle_status = "unbilled". These hours were paid but never recovered through client billing — the billing window has passed.`,
-    })
-  }
-
   // ── Deduplicate & sort ───────────────────────────────────────────────────
   const seenKeys = new Set<string>()
   const dedupedFlags = flags.filter((f) => {
@@ -424,7 +390,6 @@ export async function fetchFraudAnalysis(): Promise<FraudReport> {
       duplicates, mismatches, overlaps,
       adminHours: Math.round(adminHours * 100) / 100,
       adminPct,
-      unbilledClosedHours: Math.round(unbilledClosedHours * 100) / 100,
       unrecognizedCodes,
     },
   }

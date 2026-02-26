@@ -36,7 +36,6 @@ const CATEGORIES = [
   'Driving Billed',
   'Admin Code Fragmentation',
   'Unrecognized Job Code',
-  'Hours on Closed Unbilled Jobs',
 ]
 
 export default function FraudReport({ report }: Props) {
@@ -96,12 +95,6 @@ export default function FraudReport({ report }: Props) {
           <span className="text-yellow-400 font-bold text-lg">{summary.adminPct}%</span>
           <span className="text-yellow-300 text-xs">Admin Hours ({summary.adminHours.toFixed(0)}h)</span>
         </div>
-        {summary.unbilledClosedHours > 0 && (
-          <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-yellow-900/30 border border-yellow-700/40">
-            <span className="text-yellow-400 font-bold text-lg">{summary.unbilledClosedHours.toFixed(0)}h</span>
-            <span className="text-yellow-300 text-xs">On Closed Unbilled Jobs</span>
-          </div>
-        )}
         {summary.unrecognizedCodes.length > 0 && (
           <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40">
             <span className="text-red-400 font-bold text-lg">{summary.unrecognizedCodes.length}</span>
