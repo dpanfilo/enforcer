@@ -47,14 +47,14 @@ export interface UnsentJobsData {
   totalHours: number
 }
 
-export async function fetchUnsentJobs(): Promise<UnsentJobsData> {
-  // 1. Fetch all hours rows for Jovani
+export async function fetchUnsentJobs(employeeName: string): Promise<UnsentJobsData> {
+  // 1. Fetch all hours rows for the employee
   const allRows: { date: string; job: string | null; straight_hours: number | string | null; premium_hours: number | string | null }[] = []
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase
       .from('hours_import')
       .select('date,job,straight_hours,premium_hours')
-      .eq('employee_name', 'Jovani Mendoza')
+      .eq('employee_name', employeeName)
       .range(offset, offset + 999)
     if (error) throw new Error(error.message)
     if (!data || data.length === 0) break

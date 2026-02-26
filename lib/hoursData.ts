@@ -210,14 +210,14 @@ function getMondayOfWeek(date: string): string {
   return `${y}-${m}-${dd}`
 }
 
-export async function fetchHoursData(): Promise<HoursData> {
+export async function fetchHoursData(employeeName: string): Promise<HoursData> {
   const allRows: RawRow[] = []
 
   for (let offset = 0; offset < 4000; offset += 1000) {
     const { data, error } = await supabase
       .from('hours_import')
       .select('date,start,end,straight_code,straight_hours,premium_code,premium_hours,job,notes')
-      .eq('employee_name', 'Jovani Mendoza')
+      .eq('employee_name', employeeName)
       .range(offset, offset + 999)
 
     if (error) throw new Error(`Supabase fetch error at offset ${offset}: ${error.message}`)

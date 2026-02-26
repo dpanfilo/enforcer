@@ -14,6 +14,7 @@ export interface PermitWeek {
 
 const BULK_MIGRATION_DATE = '2025-11-04'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const JOB_CODE_RE = /^[A-Z]{2,4}-\d{2}-\d{3,5}$/
 
 function getMondayKey(dateStr: string): string {
   const dt = new Date(dateStr + 'T00:00:00')
@@ -27,7 +28,7 @@ function weekLabel(mondayKey: string): string {
   return `${MONTHS[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`
 }
 
-export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
+export async function fetchPermitWeekly(employeeName: string): Promise<PermitWeek[]> {
   // Resolve "To Permit" status index
   const { data: statusRow } = await supabase
     .from('statuses')
@@ -37,6 +38,36 @@ export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
 
   const toPermitId = statusRow?.index
   if (!toPermitId) return []
+
+  // Get the employee's structured job codes and resolve to job_ids
+  const employeeJobCodes = new Set<string>()
+  for (let offset = 0; ; offset += 1000) {
+    const { data } = await supabase
+      .from('hours_import')
+      .select('job')
+      .eq('employee_name', employeeName)
+      .not('job', 'is', null)
+      .range(offset, offset + 999)
+    if (!data || data.length === 0) break
+    for (const row of data as { job: string | null }[]) {
+      if (row.job && JOB_CODE_RE.test(row.job)) employeeJobCodes.add(row.job)
+    }
+    if (data.length < 1000) break
+  }
+
+  if (employeeJobCodes.size === 0) return []
+
+  const employeeJobIds = new Set<string>()
+  const codes = [...employeeJobCodes]
+  for (let i = 0; i < codes.length; i += 100) {
+    const { data } = await supabase
+      .from('jobs').select('index').in('full_number', codes.slice(i, i + 100))
+    for (const j of (data ?? []) as { index: number | string }[]) {
+      employeeJobIds.add(String(j.index))
+    }
+  }
+
+  if (employeeJobIds.size === 0) return []
 
   // Fetch all JMendoza → To Permit transitions
   const allRows: { job_id: number; changed_at: string }[] = []
@@ -54,8 +85,11 @@ export async function fetchPermitWeekly(): Promise<PermitWeek[]> {
     if (data.length < 1000) break
   }
 
-  // Exclude the Nov 4 bulk migration day
-  const realRows = allRows.filter((r) => r.changed_at.slice(0, 10) !== BULK_MIGRATION_DATE)
+  // Exclude the Nov 4 bulk migration day, and filter to this employee's jobs
+  const realRows = allRows.filter((r) =>
+    r.changed_at.slice(0, 10) !== BULK_MIGRATION_DATE &&
+    employeeJobIds.has(String(r.job_id))
+  )
   if (realRows.length === 0) return []
 
   // Group unique job_ids by Monday week — coerce to string for consistent keys

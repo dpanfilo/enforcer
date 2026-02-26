@@ -63,7 +63,7 @@ export interface TimeToPermitData {
   slowest: TimeToPermitJob[]
 }
 
-export async function fetchTimeToPermit(): Promise<TimeToPermitData> {
+export async function fetchTimeToPermit(employeeName: string): Promise<TimeToPermitData> {
   // 1. Fetch hours rows — build earliest date per job code
   const firstHoursMap = new Map<string, string>() // fullNumber -> earliest date
   const jobDescMap = new Map<string, string>()
@@ -72,7 +72,7 @@ export async function fetchTimeToPermit(): Promise<TimeToPermitData> {
     const { data, error } = await supabase
       .from('hours_import')
       .select('date,job,straight_hours,premium_hours')
-      .eq('employee_name', 'Jovani Mendoza')
+      .eq('employee_name', employeeName)
       .range(offset, offset + 999)
     if (error) throw new Error(error.message)
     if (!data || data.length === 0) break

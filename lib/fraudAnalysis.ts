@@ -98,14 +98,14 @@ const JOB_CODE_RE = /^[A-Z]{2,4}-\d{2}-\d{3,5}$/
 
 // ── main ───────────────────────────────────────────────────────────────────
 
-export async function fetchFraudAnalysis(): Promise<FraudReport> {
+export async function fetchFraudAnalysis(employeeName: string): Promise<FraudReport> {
   const allRows: RawRow[] = []
 
   for (let offset = 0; offset < 4000; offset += 1000) {
     const { data, error } = await supabase
       .from('hours_import')
       .select('date,start,end,straight_hours,premium_hours,job,notes')
-      .eq('employee_name', 'Jovani Mendoza')
+      .eq('employee_name', employeeName)
       .range(offset, offset + 999)
     if (error) throw new Error(error.message)
     if (!data || data.length === 0) break
