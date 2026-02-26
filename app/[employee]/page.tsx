@@ -24,9 +24,10 @@ import CalendarHeatmap from '../components/CalendarHeatmap'
 import PrintButton from '../components/PrintButton'
 import Link from 'next/link'
 
-export default async function EmployeePage({ params }: { params: { employee: string } }) {
+export default async function EmployeePage({ params }: { params: Promise<{ employee: string }> }) {
+  const { employee } = await params
   const employees = await fetchEmployees()
-  const employeeName = employees.find((e) => nameToSlug(e) === params.employee)
+  const employeeName = employees.find((e) => nameToSlug(e) === employee)
   if (!employeeName) notFound()
 
   const [
