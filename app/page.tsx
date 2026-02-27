@@ -20,7 +20,7 @@ export default async function Home() {
         </p>
 
         {/* Team dashboards */}
-        <div className="mb-2">
+        <div className="mb-2 flex flex-col gap-3">
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Teams</p>
           <Link
             href="/nicor"
@@ -28,8 +28,19 @@ export default async function Home() {
             style={{ backgroundColor: '#1a2420' }}
           >
             <div>
-              <span className="text-emerald-300 font-semibold">Nicor Permitting</span>
-              <p className="text-zinc-500 text-xs mt-0.5">Jovani, Karolina, Humberto, Nara, Lourdes</p>
+              <span className="text-emerald-300 font-semibold">Nicor Permitting — Internal</span>
+              <p className="text-zinc-500 text-xs mt-0.5">Jovani, Karolina, Humberto, Nara, Lourdes, Michelle</p>
+            </div>
+            <span className="text-zinc-500 text-sm">View dashboard →</span>
+          </Link>
+          <Link
+            href="/nicor-client"
+            className="flex items-center justify-between rounded-xl p-5 border border-indigo-700/50 hover:border-indigo-500 transition-colors"
+            style={{ backgroundColor: '#1a1d2a' }}
+          >
+            <div>
+              <span className="text-indigo-300 font-semibold">Nicor Permitting — Client View</span>
+              <p className="text-zinc-500 text-xs mt-0.5">NCP job performance, turnaround times</p>
             </div>
             <span className="text-zinc-500 text-sm">View dashboard →</span>
           </Link>
