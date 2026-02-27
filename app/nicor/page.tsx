@@ -203,6 +203,54 @@ export default async function NicorPage() {
             })()}
           </tfoot>
         </table>
+
+        {/* Period breakdown tables */}
+        {(['quarterly', 'monthly'] as const).map((mode) => {
+          const rows = draftingMisc[mode]
+          const avgDraft = rows.length > 0 ? Math.round((rows.reduce((s, r) => s + r.avgDraftingPerJob, 0) / rows.length) * 100) / 100 : 0
+          const avgMisc  = rows.length > 0 ? Math.round((rows.reduce((s, r) => s + r.avgMiscPerJob,     0) / rows.length) * 100) / 100 : 0
+          return (
+            <div key={mode} className="mt-6">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                {mode === 'quarterly' ? 'By Quarter' : 'By Month'}
+              </p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-zinc-400 text-left border-b border-zinc-700">
+                    <th className="pb-2 font-medium">Period</th>
+                    <th className="pb-2 font-medium text-blue-400">Drafting (h)</th>
+                    <th className="pb-2 font-medium text-amber-400">Misc (h)</th>
+                    <th className="pb-2 font-medium">NCP Jobs</th>
+                    <th className="pb-2 font-medium text-blue-400">Avg Draft/Job</th>
+                    <th className="pb-2 font-medium text-amber-400">Avg Misc/Job</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {rows.map((r) => (
+                    <tr key={r.period} className="hover:bg-zinc-800/40">
+                      <td className="py-2 pr-4 text-white font-medium">{r.period}</td>
+                      <td className="py-2 pr-4 text-blue-300 font-semibold">{r.draftingHours}h</td>
+                      <td className="py-2 pr-4 text-amber-300 font-semibold">{r.miscHours}h</td>
+                      <td className="py-2 pr-4 text-zinc-300">{r.ncpJobCount}</td>
+                      <td className="py-2 pr-4 text-blue-300">{r.avgDraftingPerJob}h</td>
+                      <td className="py-2 text-amber-300">{r.avgMiscPerJob}h</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-zinc-600" style={{ backgroundColor: '#0f1117' }}>
+                    <td className="pt-3 pb-2 pr-4 text-zinc-400 font-semibold text-xs uppercase tracking-wide">Avg of Averages</td>
+                    <td className="pt-3 pb-2 pr-4 text-zinc-500">—</td>
+                    <td className="pt-3 pb-2 pr-4 text-zinc-500">—</td>
+                    <td className="pt-3 pb-2 pr-4 text-zinc-500">—</td>
+                    <td className="pt-3 pb-2 pr-4 text-blue-200 font-bold text-sm">{avgDraft}h</td>
+                    <td className="pt-3 pb-2 text-amber-200 font-bold text-sm">{avgMisc}h</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        })}
       </section>
 
       {/* Individual employee cards */}
