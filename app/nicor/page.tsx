@@ -14,6 +14,7 @@ const NICOR_TEAM = [
   'Humberto Vazquez',
   'Nara Dugar',
   'Lourdes Aguirre',
+  'Michelle Juarez-Razo',
 ]
 
 export default async function NicorPage() {
