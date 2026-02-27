@@ -182,6 +182,26 @@ export default async function NicorPage() {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            {(() => {
+              const active = draftingMisc.employees.filter((e) => e.ncpJobCount > 0)
+              if (!active.length) return null
+              const avgOfAvgDraft = Math.round((active.reduce((s, e) => s + e.avgDraftingPerJob, 0) / active.length) * 100) / 100
+              const avgOfAvgMisc  = Math.round((active.reduce((s, e) => s + e.avgMiscPerJob,     0) / active.length) * 100) / 100
+              return (
+                <tr className="border-t-2 border-zinc-600" style={{ backgroundColor: '#0f1117' }}>
+                  <td className="pt-3 pb-2 pr-4 text-zinc-400 font-semibold text-xs uppercase tracking-wide">
+                    Avg of Averages
+                  </td>
+                  <td className="pt-3 pb-2 pr-4 text-zinc-500">—</td>
+                  <td className="pt-3 pb-2 pr-4 text-zinc-500">—</td>
+                  <td className="pt-3 pb-2 pr-4 text-zinc-500">—</td>
+                  <td className="pt-3 pb-2 pr-4 text-blue-200 font-bold text-sm">{avgOfAvgDraft}h</td>
+                  <td className="pt-3 pb-2 text-amber-200 font-bold text-sm">{avgOfAvgMisc}h</td>
+                </tr>
+              )
+            })()}
+          </tfoot>
         </table>
       </section>
 
