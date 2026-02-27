@@ -10,7 +10,7 @@ import PrintButton from '../components/PrintButton'
 const NICOR_TEAM = [
   'Jovani Mendoza',
   'Karolina Guerrero',
-  'Humberto Vasquez',
+  'Humberto Vazquez',
   'Nara Dugar',
   'Lourdes Aguirre',
 ]
