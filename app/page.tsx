@@ -19,6 +19,23 @@ export default async function Home() {
           Select an employee to view their hours analysis and irregularity report.
         </p>
 
+        {/* Team dashboards */}
+        <div className="mb-2">
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Teams</p>
+          <Link
+            href="/nicor"
+            className="flex items-center justify-between rounded-xl p-5 border border-emerald-700/50 hover:border-emerald-500 transition-colors"
+            style={{ backgroundColor: '#1a2420' }}
+          >
+            <div>
+              <span className="text-emerald-300 font-semibold">Nicor Permitting</span>
+              <p className="text-zinc-500 text-xs mt-0.5">Jovani, Karolina, Humberto, Nara, Lourdes</p>
+            </div>
+            <span className="text-zinc-500 text-sm">View dashboard →</span>
+          </Link>
+        </div>
+
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 mt-4">Individuals</p>
         <div className="flex flex-col gap-3">
           {employees.map((name) => (
             <Link
