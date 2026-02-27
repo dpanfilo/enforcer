@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { nameToSlug } from '@/lib/employees'
 import { fetchHoursData } from '@/lib/hoursData'
+import { fetchDraftingMisc } from '@/lib/draftingMisc'
 import MetricCard from '../components/MetricCard'
 import MonthlyChart from '../components/MonthlyChart'
 import PrintButton from '../components/PrintButton'
@@ -16,16 +17,19 @@ const NICOR_TEAM = [
 ]
 
 export default async function NicorPage() {
-  const results = await Promise.all(
-    NICOR_TEAM.map(async (name) => {
-      try {
-        const data = await fetchHoursData(name)
-        return { name, data, error: null }
-      } catch {
-        return { name, data: null, error: 'No data found' }
-      }
-    })
-  )
+  const [draftingMisc, results] = await Promise.all([
+    fetchDraftingMisc(NICOR_TEAM),
+    Promise.all(
+      NICOR_TEAM.map(async (name) => {
+        try {
+          const data = await fetchHoursData(name)
+          return { name, data, error: null }
+        } catch {
+          return { name, data: null, error: 'No data found' }
+        }
+      })
+    ),
+  ])
 
   const valid = results.filter((r) => r.data !== null)
 
@@ -106,6 +110,79 @@ export default async function NicorPage() {
           Combined Monthly Hours — REG vs OVT
         </h2>
         <MonthlyChart data={combinedMonthly} />
+      </section>
+
+      {/* Drafting vs Miscellaneous breakdown */}
+      <section style={{ backgroundColor: '#1a1d27' }} className="rounded-xl p-6 mb-8">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+          Drafting vs Miscellaneous — NCP Jobs
+        </h2>
+        <p className="text-xs text-zinc-500 mb-6">
+          Drafting = hours on NCP job codes · Miscellaneous = admin/non-billable hours · Averages per unique NCP job
+        </p>
+
+        {/* Team summary chips */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          <div className="rounded-lg px-4 py-3 bg-blue-900/30 border border-blue-700/40">
+            <p className="text-blue-300 font-bold text-xl">{draftingMisc.totalDrafting}h</p>
+            <p className="text-blue-400 text-xs mt-0.5">Total Drafting</p>
+          </div>
+          <div className="rounded-lg px-4 py-3 bg-amber-900/30 border border-amber-700/40">
+            <p className="text-amber-300 font-bold text-xl">{draftingMisc.totalMisc}h</p>
+            <p className="text-amber-400 text-xs mt-0.5">Total Miscellaneous</p>
+          </div>
+          <div className="rounded-lg px-4 py-3 bg-zinc-800 border border-zinc-600">
+            <p className="text-white font-bold text-xl">{draftingMisc.uniqueNcpJobs}</p>
+            <p className="text-zinc-400 text-xs mt-0.5">Unique NCP Jobs</p>
+          </div>
+          <div className="rounded-lg px-4 py-3 bg-blue-900/20 border border-blue-700/30">
+            <p className="text-blue-300 font-bold text-xl">{draftingMisc.avgDraftingPerJob}h</p>
+            <p className="text-blue-400 text-xs mt-0.5">Avg Drafting / Job</p>
+          </div>
+          <div className="rounded-lg px-4 py-3 bg-amber-900/20 border border-amber-700/30">
+            <p className="text-amber-300 font-bold text-xl">{draftingMisc.avgMiscPerJob}h</p>
+            <p className="text-amber-400 text-xs mt-0.5">Avg Misc / Job</p>
+          </div>
+          <div className="rounded-lg px-4 py-3 bg-zinc-800 border border-zinc-600">
+            <p className="text-white font-bold text-xl">{draftingMisc.miscRatio}%</p>
+            <p className="text-zinc-400 text-xs mt-0.5">Misc of Total</p>
+          </div>
+        </div>
+
+        {/* Rule of thumb */}
+        <div className="rounded-lg px-4 py-3 mb-6 border border-emerald-700/40" style={{ backgroundColor: '#0d2018' }}>
+          <p className="text-emerald-300 text-sm font-medium">
+            Rule of thumb: for every <strong>1h</strong> of drafting, add{' '}
+            <strong>{draftingMisc.miscPerDraftingHour}h</strong> miscellaneous
+            &nbsp;·&nbsp; or <strong>{draftingMisc.avgMiscPerJob}h misc</strong> per NCP job invoiced
+          </p>
+        </div>
+
+        {/* Per-employee table */}
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-zinc-400 text-left border-b border-zinc-700">
+              <th className="pb-2 font-medium">Employee</th>
+              <th className="pb-2 font-medium text-blue-400">Drafting (h)</th>
+              <th className="pb-2 font-medium text-amber-400">Misc (h)</th>
+              <th className="pb-2 font-medium">NCP Jobs</th>
+              <th className="pb-2 font-medium text-blue-400">Avg Draft/Job</th>
+              <th className="pb-2 font-medium text-amber-400">Avg Misc/Job</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800">
+            {draftingMisc.employees.map((e) => (
+              <tr key={e.name} className="hover:bg-zinc-800/40">
+                <td className="py-2 pr-4 text-white font-medium">{e.name}</td>
+                <td className="py-2 pr-4 text-blue-300 font-semibold">{e.draftingHours}h</td>
+                <td className="py-2 pr-4 text-amber-300 font-semibold">{e.miscHours}h</td>
+                <td className="py-2 pr-4 text-zinc-300">{e.ncpJobCount}</td>
+                <td className="py-2 pr-4 text-blue-300">{e.avgDraftingPerJob}h</td>
+                <td className="py-2 text-amber-300">{e.avgMiscPerJob}h</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       {/* Individual employee cards */}
